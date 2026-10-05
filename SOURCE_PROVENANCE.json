@@ -1,0 +1,18 @@
+{
+  "source_project": "SpecNaacl",
+  "source_commit": "c3f05ade41183c0e0733ef11641c267d66c112f3",
+  "source_fingerprints": {
+    "grpo_speculative.py": "173ec02774321aa9dd4bfecb6e30019ecc4e91329a7dde2145c32bc589eb3679",
+    "helper/sampling.py": "2a90050530de874e2bfa42e9329db26275004c96805acd7c86fb725a23db7066",
+    "helper/step_metrics.py": "f306900f442c3ede2e96d094b8c3415680ed1ab03af4bbefaa60a9d58af3ee6e",
+    "helper/get_QAs.py": "6de7a736db0db7faff1f3740a74050c10a7522d2ba3a1c62543895b8dae6f7cb",
+    "helper/rewards.py": "4a14324812d999a31e8b414cd8dca33d98c275876e7b81ca1e0847874ae55f30",
+    "helper/checkpointing.py": "16a8f37b5faec68a820e7cb70d8e547d90d9fd5d3ab010eb4d4066ea459854cb",
+    "scripts/write_run_metadata.py": "57b5116f42666c0a6ffce535abec99fbc9e7c9d027a716613b17b1fd6c65aaa0",
+    "scripts/plot_training_time.py": "7ab5ac623ebe9a7a390e884856d630706b1a28b8234fa1c0504773830fbb971e",
+    "scripts/launch/train_model.sh": "ccb0fe0afbc5da3fbbd66fafd7da3e9e783e53de7380de6042670d9f1d7a9067",
+    "configs/_shared/b200_common.env": "15f9a542c13c3b95ec6d27d6f9fd5f3bc2f61955427c52b00b0eda21ae387a5a",
+    "requirements.txt": "88af6157c158346bd92def9de58e13e03e5b79e2152f595b1d42c81e1df3714f"
+  },
+  "removed": "draft/SpecForge/speculative/tree/verifier/Reflex/analysis branches"
+}

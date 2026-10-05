@@ -1,0 +1,62 @@
+# Pure GRPO target-only baseline
+
+Standalone sibling of SpecNaacl. No code import, symlink or runtime dependency
+on its draft/SpecForge/tree/verifier/Reflex components. Source inheritance is
+recorded in SOURCE_PROVENANCE.json. SpecNaacl sources are not modified.
+
+Only rollout changes: ordinary target-only HF DynamicCache, one-token target
+forwards, inherited FP32 temperature/top-p/top-k probabilities and multinomial.
+Prefix KV is shared before response expansion; every response samples its own
+first token. EOS trajectories leave the batch; active-batch real-length stopping
+matches Source, without speculative chunk overshoot/tree padding.
+
+Reward/dataset files, collator, token logps and GRPO loss/backward are verbatim.
+LoRA configuration, AdamW defaults, constant LR/no scheduler, variance filtering,
+packing, distributed gradient averaging and optimizer cadence match Source.
+All7 train_<model>.sh launchers preserve their common target settings, including
+batch8/accum4/LR1e-5/responses8/bf16/eager. Generic launchers and direct Python CLI
+retain their respective Source defaults, which differ from per-model wrappers;
+do not mix invocation styles. scripts/check_fair_config.py checks paired flags.
+
+Output/checkpoint parent defaults to ../SpecNaacl/outputs as requested. Unique
+method-puregrpo run names and active_run_puregrpo/latest_run_puregrpo links never
+overwrite Source's runs or resume links. All explicit OUTPUT_ROOT/RUN_DIR
+overrides, model/tokenizer/dataset paths are preserved. Runtime does not require
+SpecNaacl code; only comparison/audit scripts need the sibling. No weights/data
+are copied into this folder.
+
+No AAL/acceptance/draft metrics or checkpoint tensors are fabricated. Common
+JSONL/CSV uses inherited PhaseTimings/StepMetricsWriter and counter differences.
+step/cumulative_generation_tokens_per_s divides ALL generated tokens (including
+EOS and filtered groups) by generation time. Legacy tokens_per_s and summary
+generation_tokens_per_s divide by JOB WALL, matching Source; use the cumulative
+generation field for generation-only throughput. Reward/target_loss retains the
+Source trained-response denominator, not unfiltered eval samples. Memory is GiB;
+peaks are job-to-date. Final summary wall includes target/checkpoint I/O.
+
+## Inherited behavior and comparison limits
+
+- accumulation_steps controls Source step labels (used_groups // (batch*accum)),
+  but optimizer updates occur whenever all ranks have a nonempty retained buffer.
+  Pure preserves this, not standard deferred accumulation. One label can include
+  several updates; Pure additionally records actual optimizer_steps.
+- Source length-sorts token/mask rows but indexes advantages in original response
+  order. This legacy association is preserved. It may be a GRPO correctness
+  issue; a fix must be applied to BOTH methods before a new fair comparison,
+  not silently to Pure alone.
+- Draft construction consumes RNG before Source LoRA initialization. LoRA B=0
+  gives the same initial distribution but LoRA A can differ and affect training.
+  Strict paired benchmark therefore requires the SAME TARGET_ADAPTER. A
+  target-only shared-initialization script is supplied; no draft is loaded.
+- Source duplicates a sampled prefill root across responses; Pure samples EACH
+  response root directly, as requested. This speculative-prefix coupling is not
+  emulated. Same seed never guarantees identical generated responses.
+- Source has no ordinary periodic target evaluation, only draft lag branches.
+  Pure EVAL_INTERVAL=0 matches it. Optional eval restores RNG/module modes and
+  never enters replay. Fair checker rejects nonzero eval_interval or top_k:
+  Source training currently forwards top_k=None.
+- Resume schema is target-only; cannot resume a full Source checkpoint. Use its
+  exported target HF adapter as TARGET_ADAPTER instead. Resume Pure with the
+  saved world size; no draft assets are read.
+
+See huongdanchay.md for commands and IMPLEMENTATION_REPORT.md for validation.
