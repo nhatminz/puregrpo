@@ -20,6 +20,7 @@ def test_target_only_validation_imports_no_spec_packages(monkeypatch,tmp_path,pe
         return SimpleNamespace(**{key:object() for key in ('LoraConfig','TaskType','get_peft_model',
             'get_peft_model_state_dict','set_peft_model_state_dict')})
     monkeypatch.setattr(env.importlib,'import_module',fake_import)
+    monkeypatch.setattr(env,'probe_target_runtime',lambda device:'target-only test probe')
     env.main(['--requirements',str(requirements),'--require-cuda'])
     assert set(imported)=={'torch','peft'}
 
@@ -28,5 +29,5 @@ def test_environment_rejects_unvalidated_version(monkeypatch,tmp_path):
     requirements=tmp_path/'requirements.txt'; requirements.write_text('peft==0.21.1\n')
     monkeypatch.setattr(sys,'version_info',(3,12,3))
     monkeypatch.setattr(env,'version',lambda name:'0.0.0')
-    with pytest.raises(RuntimeError,match='expected 0.21.1, found 0.0.0'):
+    with pytest.raises(RuntimeError,match='supported .*found 0.0.0'):
         env.main(['--requirements',str(requirements)])

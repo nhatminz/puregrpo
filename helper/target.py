@@ -25,7 +25,10 @@ def load_target(args, device):
                                  'gate_proj', 'up_proj', 'down_proj'])
     target = get_peft_model(target, lora_config)
     if args.load_lora_path:
+        from helper.shared_adapter import validate_adapter_recipe, verify_loaded_adapter
+        validate_adapter_recipe(args.load_lora_path,args.model_dir)
         # Same existing-default-adapter load as SpecNaacl (not PeftModel reconstruction).
         target.load_adapter(args.load_lora_path, adapter_name='default')
+        verify_loaded_adapter(target,args.load_lora_path,args.model_dir)
     target.print_trainable_parameters()
     return target, tokenizer

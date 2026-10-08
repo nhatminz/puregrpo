@@ -10,13 +10,21 @@ Prefix KV is shared before response expansion; every response samples its own
 first token. EOS trajectories leave the batch; active-batch real-length stopping
 matches Source, without speculative chunk overshoot/tree padding.
 
-Reward/dataset files, collator, token logps and GRPO loss/backward are verbatim.
+Reward functions, collator and token logps are preserved. The parquet prompt
+parser now matches current Source for NumPy-array prompts. Pure's existing
+chunked GRPO loss is kept, not replaced by Source's newer full-logits loss;
+tests compare formulas, gradients and AdamW states within FP32 tolerance.
 LoRA configuration, AdamW defaults, constant LR/no scheduler, variance filtering,
 packing, distributed gradient averaging and optimizer cadence match Source.
 All7 train_<model>.sh launchers preserve their common target settings, including
-batch8/accum4/LR1e-5/responses8/bf16/eager. Generic launchers and direct Python CLI
+SimpleLR/batch8/accum4/LR1e-6/responses8/bf16/sdpa. Generic launchers and direct Python CLI
 retain their respective Source defaults, which differ from per-model wrappers;
-do not mix invocation styles. scripts/check_fair_config.py checks paired flags.
+do not mix invocation styles. scripts/check_fair_config.py defaults to checking
+all seven models against BOTH fastgrpo and opd_reflex, plus the target LoRA recipe.
+FAIRNESS_AUDIT.json records the current inspected Source revision and unchanged
+Pure execution files; SOURCE_PROVENANCE.json remains historical provenance.
+DynamicCache constructor selection is API compatibility only (4.51 vs newer HF),
+not a static/persistent/custom cache or decoding optimization.
 
 Output/checkpoint parent defaults to ../SpecNaacl/outputs as requested. Unique
 method-puregrpo run names and active_run_puregrpo/latest_run_puregrpo links never
@@ -48,10 +56,24 @@ peaks are job-to-date. Final summary wall includes target/checkpoint I/O.
   gives the same initial distribution but LoRA A can differ and affect training.
   Strict paired benchmark therefore requires the SAME TARGET_ADAPTER. A
   target-only shared-initialization script is supplied; no draft is loaded.
+  It saves an artifact hash and runtime manifest. Pure checks every loaded LoRA
+  tensor against that artifact at initialization, outside generation/training.
+- Latest historical FastGRPO samples in its logits dtype, whereas Pure retains
+  its pre-existing FP32 probability implementation. Temperature/top-p/no-top-k
+  match, but reduced-precision distributions/tokens need not be bitwise identical.
+  This is a reported implementation difference, not a Pure-only sampler change.
+  Source's seeded DataLoader generator and Pure's existing global generator also
+  consume RNG differently; shared adapter tensors do not imply matched responses.
+  Invalid-probability fallback also has different RNG consumption (Source draws
+  only valid rows; Pure retains its existing EOS fallback draws for all rows).
+- For an all-zero response mask Pure's existing denominator clamp returns zero,
+  while current Source's unguarded division can return NaN. Normal retained
+  nonempty responses have the same mathematical loss; no one-sided fix was made.
 - Source duplicates a sampled prefill root across responses; Pure samples EACH
   response root directly, as requested. This speculative-prefix coupling is not
   emulated. Same seed never guarantees identical generated responses.
-- Source has no ordinary periodic target evaluation, only draft lag branches.
+- Source has no ordinary periodic target evaluation; disable policy-lag branches
+  when benchmarking the production methods.
   Pure EVAL_INTERVAL=0 matches it. Optional eval restores RNG/module modes and
   never enters replay. Fair checker rejects nonzero eval_interval or top_k:
   Source training currently forwards top_k=None.

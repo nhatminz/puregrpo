@@ -18,7 +18,7 @@ def parse_args(argv=None):
     p.add_argument('--model_type', default='Qwen2___5-Math-7B')
     p.add_argument('--load_lora_path', default='')
     p.add_argument('--dtype', choices=['auto','bf16','fp16','fp32'], default='auto')
-    p.add_argument('--attn_implementation', default='')
+    p.add_argument('--attn_implementation', default='sdpa')
     p.add_argument('--train_option', default='simplelr_abel_level3to5')
     p.add_argument('--dataset_path', required=True)
     p.add_argument('--train_split', default='train')

@@ -91,18 +91,19 @@ def test_eos_compaction_and_shorter_remaining_prompt_length_limit(device,stop_on
     assert output['target_decode_forwards']==(2 if stop_on_eos else 4)
 
 
-def test_sampler_primitives_are_verbatim_and_target_probability_identity():
-    original=Path(__file__).resolve().parents[2]/'SpecNaacl/helper/sampling.py'
-    namespace={'torch':torch}
+def test_preserved_sampler_matches_current_historical_source_for_fp32():
+    # Current SpecNaacl moved its historical sampler back into this file.
+    # Pure's already-existing FP32 sampler is intentionally NOT replaced.
+    import warnings
+    original=Path(__file__).resolve().parents[2]/'SpecNaacl/helper/fastgrpo_generate.py'
+    namespace={'torch':torch,'F':torch.nn.functional,'warnings':warnings}
     tree=ast.parse(original.read_text())
-    funcs=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name in {'build_sampling_probs','sample_from_probs'}]
+    funcs=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='sampling']
     exec(compile(ast.Module(body=funcs,type_ignores=[]),str(original),'exec'),namespace)
     for logits in (torch.randn(3,2,17),torch.full((3,2,17),float('nan'))):
         a=build_sampling_probs(logits,.8,.95,5,16)
-        b=namespace['build_sampling_probs'](logits,.8,.95,5,16)
-        torch.testing.assert_close(a,b,rtol=0,atol=0)
         torch.manual_seed(4); x=sample_from_probs(a)
-        torch.manual_seed(4); y=namespace['sample_from_probs'](b)
+        torch.manual_seed(4); y=namespace['sampling'](logits,temperature=.8,top_p=.95,top_k=5,eos_token_id=16)
         assert torch.equal(x,y)
 
 

@@ -1,0 +1,27 @@
+{
+  "inspected_source_commit": "8366844b52c70835768dba57e06bda149a65f5d9",
+  "inspected_source_fingerprints": {
+    "grpo_speculative.py": "4ea9b441c81250587565d1c97904cb4c7290a09103c5aa1e9256ba1724e51e2f",
+    "helper/fastgrpo_training.py": "bbc0971609b7ac0e4961921155ff844faec8de428303fda7e76882fa3b7a9359",
+    "helper/fastgrpo_generate.py": "dd9495d765b9669a6b673e61e13e2af6f073b4140b00adb1bf42c4bab64efd93",
+    "helper/get_QAs.py": "72974e50046cd70fe956a00a787fdaa070bce36110ee239a7d4ecd94dcfd58d2",
+    "helper/rewards.py": "4a14324812d999a31e8b414cd8dca33d98c275876e7b81ca1e0847874ae55f30",
+    "scripts/validate_environment.py": "bfe6e9b5813d9d7e73f53415b4707577e17398de2227b8cc40240561bfe9d785",
+    "scripts/launch/train_model.sh": "2adbe2b3aa1e9193a5907b02c19e970930cca9fd3ee547b9f0c2e0da84bed84c",
+    "configs/_shared/b200_common.env": "36e72c90151608db667dd83d89fc4af60ff49dbcc04ec4f06daaabf58171ecfd",
+    "requirements.txt": "373731e733272f3eaab127a466a8509e425797901d1f66d4173cd649c73d1074"
+  },
+  "unchanged_pure_execution_files": {
+    "training.py": "85013e720f33c8c9ab3eaa57b914186870341731b79a937216b7d30ccf78cac3",
+    "helper/grpo_core.py": "f7800c0ac655b0b8ba866ee229903da77c44ea66f85bb7a782548c5d76678780",
+    "helper/train_ops.py": "5b080a6d355fb5571381776a94af95ea17068bcd5038d3cea80c2cffc19ec125",
+    "helper/sampling.py": "91545f101b93c5ec5f21a6f3959fcd60b6e82a044facab6e7a45b74b1f56a8dc",
+    "helper/metrics.py": "1eac9dbebf059490b902e3c3ad9799b24d0592643070993d9e3b87030c805d74",
+    "evaluation.py": "3c6252aebf9f09f018a87823c1af9c779321ceda64c0936ddc6a1db4635163aa"
+  },
+  "api_compatibility_only": {
+    "file": "helper/autoregressive.py",
+    "original_sha256": "e607dac246561927af8279f3014c2666c8aa84f5be585f5e6e055b9b66cd9f6f",
+    "change": "Select DynamicCache() on Transformers 4.51; retain config argument on newer versions. No decoding/sampling changes."
+  }
+}

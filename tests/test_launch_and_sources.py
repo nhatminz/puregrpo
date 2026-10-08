@@ -16,15 +16,16 @@ KEYS=('qwen25_1p5b','qwen25_3b','qwen25_7b','qwen25_14b','qwen3_1p7b','qwen3_4b'
 
 @pytest.mark.parametrize('key',KEYS)
 @pytest.mark.parametrize('overrides',[False,True])
-def test_source_and_pure_launchers_have_identical_common_settings(key,overrides):
+@pytest.mark.parametrize('method',['fastgrpo','opd_reflex'])
+def test_source_and_pure_launchers_have_identical_common_settings(key,overrides,method):
     env=dict(os.environ,PYTHON_BIN=sys.executable)
     if overrides:
         env.update(DATASET='simplelr',TARGET_LR='2e-5',BATCH_SIZE='3',ACCUMULATION_STEPS='7',
                    REPEATED_GENERATE_NUMS='3',LOG_INTERVAL='5',TEMPERATURE='.8',TOP_P='.9',
                    TRAIN_SUBSET_SEED='101',CUDA_VISIBLE_DEVICES='2,3',NPROC_PER_NODE='2')
         env.pop('RESPONSES_PER_PROMPT',None)
-    result=compare(key,SOURCE,env)
-    assert result['pure_method']=='puregrpo' and result['comparison_method']=='specnaacl'
+    result=compare(key,SOURCE,env,method)
+    assert result['pure_method']=='puregrpo' and result['comparison_method']==method
 
 
 def test_unmatched_topk_and_periodic_evaluation_are_not_claimed_fair():
@@ -59,14 +60,20 @@ def test_all_shell_syntax_and_cli_config_validation(tmp_path):
     result=subprocess.run([sys.executable,*tokens[index:],'--validate_config'],cwd=ROOT,
                           capture_output=True,text=True,check=True)
     config=json.loads(result.stdout)
-    assert config['repeated_generate_nums']==8 and config['target_lr']==1e-5
+    assert config['repeated_generate_nums']==8 and config['target_lr']==1e-6
+    assert config['attn_implementation']=='sdpa'
+    assert config['train_option']=='simplelr_abel_level3to5'
     assert not (tmp_path/'output').exists()
 
 
 def test_source_fingerprints_unchanged_and_output_parent_preserved():
-    manifest=json.loads((ROOT/'SOURCE_PROVENANCE.json').read_text())
-    for path,sha in manifest['source_fingerprints'].items():
+    # Original SOURCE_PROVENANCE is historical, not a claim that Source never
+    # evolves. This audit records the actual revision inspected for this task.
+    manifest=json.loads((ROOT/'FAIRNESS_AUDIT.json').read_text())
+    for path,sha in manifest['inspected_source_fingerprints'].items():
         assert hashlib.sha256((SOURCE/path).read_bytes()).hexdigest()==sha,path
+    for path,sha in manifest['unchanged_pure_execution_files'].items():
+        assert hashlib.sha256((ROOT/path).read_bytes()).hexdigest()==sha,path
     env=dict(os.environ,DRY_RUN='true',PYTHON_BIN=sys.executable)
     _,pure=command(ROOT,'qwen25_3b',env)
     _,spec=command(SOURCE,'qwen25_3b',env)

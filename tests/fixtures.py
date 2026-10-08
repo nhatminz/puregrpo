@@ -54,6 +54,9 @@ class Target(torch.nn.Module):
         return self.model.adapter.dtype
     def get_base_model(self):
         return self
+    def forward(self,input_ids,attention_mask,**kwargs):
+        out = self.model(input_ids,attention_mask,**kwargs)
+        return SimpleNamespace(logits=self.lm_head(out.last_hidden_state))
     def disable_adapter_layers(self):
         self.model.enabled = False
     def enable_adapter_layers(self):

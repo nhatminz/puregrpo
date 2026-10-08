@@ -31,7 +31,13 @@ def autoregressive_generate(target_model, input_ids, attention_mask, tokenizer, 
     eos = tokenizer.eos_token_id
     if cache_factory is None:
         from transformers import DynamicCache
-        cache_factory = lambda: DynamicCache(config=base.config)
+        # API compatibility only: 4.51 has DynamicCache(), newer versions accept
+        # config. This remains the same ordinary HF autoregressive cache.
+        import inspect
+        if 'config' in inspect.signature(DynamicCache).parameters:
+            cache_factory = lambda: DynamicCache(config=base.config)
+        else:
+            cache_factory = DynamicCache
     cache = cache_factory()
     # Preserve SpecNaacl's zero positions for left-padding and real RoPE indices.
     positions = (attention_mask.long().cumsum(-1) - 1).clamp_min(0)
