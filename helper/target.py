@@ -3,6 +3,8 @@ from helper.grpo_core import _dtype_from_name, _resolve_attn_implementation
 
 
 def load_target(args, device):
+    from helper.shared_adapter import preflight_shared_adapter, initialization_report
+    preflight_shared_adapter(args.load_lora_path,args.model_dir)
     from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
     from peft import LoraConfig, TaskType, get_peft_model
     config = AutoConfig.from_pretrained(args.model_dir, local_files_only=True)
@@ -30,5 +32,6 @@ def load_target(args, device):
         # Same existing-default-adapter load as SpecNaacl (not PeftModel reconstruction).
         target.load_adapter(args.load_lora_path, adapter_name='default')
         verify_loaded_adapter(target,args.load_lora_path,args.model_dir)
+    initialization_report(target,args,method='puregrpo')
     target.print_trainable_parameters()
     return target, tokenizer

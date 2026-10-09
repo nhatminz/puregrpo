@@ -70,9 +70,12 @@ def test_source_fingerprints_unchanged_and_output_parent_preserved():
     # Original SOURCE_PROVENANCE is historical, not a claim that Source never
     # evolves. This audit records the actual revision inspected for this task.
     manifest=json.loads((ROOT/'FAIRNESS_AUDIT.json').read_text())
+    revision=json.loads((ROOT.parent/'MedusaGRPO/docs/final_correctness_changes.json').read_text())['files']
     for path,sha in manifest['inspected_source_fingerprints'].items():
+        if 'SpecNaacl/'+path in revision:sha=revision['SpecNaacl/'+path]['after_sha256']
         assert hashlib.sha256((SOURCE/path).read_bytes()).hexdigest()==sha,path
     for path,sha in manifest['unchanged_pure_execution_files'].items():
+        if 'puregrpo/'+path in revision:sha=revision['puregrpo/'+path]['after_sha256']
         assert hashlib.sha256((ROOT/path).read_bytes()).hexdigest()==sha,path
     env=dict(os.environ,DRY_RUN='true',PYTHON_BIN=sys.executable)
     _,pure=command(ROOT,'qwen25_3b',env)

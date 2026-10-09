@@ -23,7 +23,7 @@ def initial_data():
         'total_rollout_tokens','generated_samples','trace_rollout_count','reward_sum',
         'reward_count','target_loss_sum','target_loss_count','optimizer_steps',
         'ignore_due_correct','ignore_due_incorrect')}
-    data.update({key: [] for key in ('messages','rewards','std_rewards','length_stdev',
+    data.update({key: [] for key in ('messages','rewards','std_rewards','response_metadata','length_stdev',
                                     'length_range','length_cv','generate_length_list')})
     return data
 
@@ -43,6 +43,11 @@ def train(args, *, target=None, tokenizer=None, train_rows=None, reward_function
         dist.init_process_group(backend='nccl', init_method='env://')
     rank = dist.get_rank() if dist.is_initialized() else 0
     main_rank = rank == 0
+    max_optimizer_steps=getattr(args,'max_target_optimizer_steps',0)
+    max_prompts=getattr(args,'max_rollout_prompts',0)
+    if max_prompts and max_prompts % world_size:
+        raise ValueError('max_rollout_prompts must be divisible by world_size')
+    local_prompt_budget=max_prompts//world_size
     _seed_everything(args.seed)
     if target is None:
         target, tokenizer = load_target(args, device)
@@ -148,8 +153,20 @@ def train(args, *, target=None, tokenizer=None, train_rows=None, reward_function
             if epoch == start_epoch and index < start_batch:
                 continue
             last_epoch, next_batch = epoch, index + 1
+            if ((max_optimizer_steps and data['optimizer_steps']>=max_optimizer_steps) or
+                    (local_prompt_budget and data.get('rollout_prompts_seen',0)>=local_prompt_budget)):
+                checkpoint_at(epoch,index)
+                stop=True
+                break
+            if local_prompt_budget:
+                remaining=local_prompt_budget-data.get('rollout_prompts_seen',0)
+                if remaining<len(batch['answers']):batch={key:value[:remaining] for key,value in batch.items()}
             if batch['input_ids'].shape[-1] >= args.max_length or None in batch['answers']:
                 continue
+            import hashlib
+            data['prompt_order_sha256']=hashlib.sha256((data.get('prompt_order_sha256','')+
+                json.dumps(batch['messages'],sort_keys=True,ensure_ascii=True)).encode()).hexdigest()
+            data['rollout_prompts_seen']=data.get('rollout_prompts_seen',0)+len(batch['answers'])
             output = generate(target, batch['input_ids'].to(device), batch['attention_mask'].to(device), tokenizer,
                 do_sample=True, max_length=args.max_length, repeated_generate_nums=args.repeated_generate_nums,
                 temperature=args.temperature, top_p=args.top_p, top_k=args.top_k or None,
@@ -165,7 +182,7 @@ def train(args, *, target=None, tokenizer=None, train_rows=None, reward_function
             data['length_cv'].append((stdev(lengths) if len(lengths)>1 else 0.)/mean(lengths))
             functions = reward_functions or (None, None)
             used, _ = accumulate_groups(data, output, batch['messages'], batch['answers'],
-                                       args.repeated_generate_nums, *functions)
+                                       args.repeated_generate_nums, *functions, prompt_context=(rank, epoch, index))
             data['used_items'] += used
             data['trace_rollout_count'] += 1
             ready = torch.tensor(int(bool(data['messages'])), device=device, dtype=torch.int32)
@@ -181,7 +198,7 @@ def train(args, *, target=None, tokenizer=None, train_rows=None, reward_function
             data['reward_sum'] += float(sum(data['rewards']))
             data['reward_count'] += len(data['rewards'])
             def on_iteration(iteration, losses):
-                if iteration != args.grpo_iteration_num - 1:
+                if iteration != args.grpo_iteration_num - 1 and not (max_optimizer_steps and data['optimizer_steps']>=max_optimizer_steps):
                     return
                 values, snapshot = take_snapshot()
                 extras = dict(phase='target_train', method='puregrpo', epoch=epoch+1,
@@ -204,7 +221,8 @@ def train(args, *, target=None, tokenizer=None, train_rows=None, reward_function
                 if step % args.log_interval == 0:
                     batch_bar.set_postfix(step=step, reward=extras['mean_reward'], loss=extras['target_loss'], phase='GRPO')
             update_policy(model, optimizer, data, tokenizer, args, timings, on_iteration)
-            for key in ('messages','rewards','std_rewards'):
+            data.setdefault('optimizer_step_cadence',[]).append((data['rollout_prompts_seen'],data['optimizer_steps']))
+            for key in ('messages','rewards','std_rewards','response_metadata'):
                 data[key].clear()
             if main_rank and step and step % 500 == 0:
                 target.save_pretrained(str(Path(args.saved_model_dir)/f'step{step}'))
@@ -225,7 +243,9 @@ def train(args, *, target=None, tokenizer=None, train_rows=None, reward_function
             if args.save_checkpoint_steps>0 and local_steps>0 and local_steps%args.save_checkpoint_steps==0 and step!=last_checkpoint_step:
                 checkpoint_at(epoch, index+1)
                 last_checkpoint_step = step
-            if args.max_grpo_steps and local_steps>=args.max_grpo_steps:
+            if ((args.max_grpo_steps and local_steps>=args.max_grpo_steps) or
+                    (max_optimizer_steps and data['optimizer_steps']>=max_optimizer_steps) or
+                    (local_prompt_budget and data['rollout_prompts_seen']>=local_prompt_budget)):
                 checkpoint_at(epoch,index+1)
                 stop = True
                 break
@@ -247,6 +267,8 @@ def train(args, *, target=None, tokenizer=None, train_rows=None, reward_function
     # Common summary names keep Source's wall-throughput aliases; no AAL fields.
     summary = dict(method='puregrpo', run_name=args.version_name, final_step=step,
         completed_grpo_steps=max(0,step-trace_start_step), optimizer_steps=int(values['optimizer_steps']),
+        rollout_prompts_seen=data.get('rollout_prompts_seen',0),prompt_order_sha256=data.get('prompt_order_sha256'),
+        optimizer_step_cadence=data.get('optimizer_step_cadence',[]),
         stopped_by_max_grpo_steps=stop, total_rollout_tokens=int(values['total_rollout_tokens']),
         generated_samples=int(values['generated_samples']), rollout_count=int(values['trace_rollout_count']),
         mean_reward=values['mean_reward'], target_loss=values['target_loss'],
@@ -257,7 +279,9 @@ def train(args, *, target=None, tokenizer=None, train_rows=None, reward_function
         saved_model_dir=saved_target, checkpoint_dir=args.checkpoint_dir,
         metrics_jsonl=args.log_file, timing_csv=args.timing_file, **snapshot)
     if main_rank:
-        text = json.dumps(summary,indent=2)
+        summary['initialization'] = getattr(target,'_initialization_report', {'status':'NOT VERIFIED'})
+        summary['grpo_alignment_version'] = 'response_rows_v2'
+        text = json.dumps(summary, indent=2)
         Path(args.summary_file).write_text(text+'\n',encoding='utf-8')
         Path(args.summary_file).with_suffix('.txt').write_text(text+'\n',encoding='utf-8')
         print(text)

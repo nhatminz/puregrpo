@@ -55,6 +55,7 @@ cmd=("$PYTHON_BIN" -m torch.distributed.run --standalone "--nproc_per_node=$NPRO
   --summary_file "$RUN_DIR/summary.json" --saved_model_dir "$RUN_DIR/checkpoints/target"
   --saved_statistics_dir "$RUN_DIR/statistics" --checkpoint_dir "$RUN_DIR/checkpoints/resume"
   --resume_checkpoint "$RESUME_CHECKPOINT" --save_checkpoint_steps "$SAVE_CHECKPOINT_STEPS" --keep_last_checkpoints "$KEEP_LAST_CHECKPOINTS")
+cmd+=(--max_target_optimizer_steps "${MAX_TARGET_OPTIMIZER_STEPS:-0}" --max_rollout_prompts "${MAX_ROLLOUT_PROMPTS:-0}")
 cmd+=("$@")
 printf 'Run name : %s\nRun dir  : %s\nModel    : %s\nDataset  : %s\nMethod   : puregrpo\nGPUs     : %s\n' \
   "$RUN_NAME" "$RUN_DIR" "$MODEL" "$DATASET_PATH" "$NPROC_PER_NODE"

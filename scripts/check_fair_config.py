@@ -134,7 +134,7 @@ def main():
     methods = ('fastgrpo','opd_reflex') if args.method == 'both' else (args.method,)
     results = [compare(key,args.source.resolve(),env,method,args.training_arg)
                for key in models for method in methods]
-    print(json.dumps({'status':'PASS','checks':len(results),'results':results},indent=2))
+    print(json.dumps({'status':'PASS','scope':'launcher_configuration_only; loaded tensors and runtime fairness require MedusaGRPO/scripts/check_fairness.py','checks':len(results),'results':results},indent=2))
 
 
 if __name__ == '__main__':

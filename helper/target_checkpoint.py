@@ -22,7 +22,8 @@ def save_checkpoint(path, *, target, optimizer, data, epoch, next_batch, step, w
         states[0] = local
     if rank:
         return
-    payload = dict(format='puregrpo_target_checkpoint_v1', world_size=world,
+    payload = dict(format='puregrpo_target_checkpoint_v1', grpo_alignment_version='response_rows_v2', world_size=world,
+                   initial_target_tensor_sha256=getattr(target,'_shared_initialization',{}).get('loaded_tensor_sha256'),
                    target_lora=adapter_state, optimizer_target=optimizer.state_dict(),
                    scheduler_target=None, rank_states=states, epoch=epoch,
                    next_batch=next_batch, step=step,
@@ -39,6 +40,8 @@ def load_checkpoint(path, *, target, optimizer, adapter_loader=None):
     state = torch.load(path, map_location='cpu', weights_only=False)
     if state.get('format') != 'puregrpo_target_checkpoint_v1':
         raise ValueError('resume requires a Pure GRPO checkpoint; use TARGET_ADAPTER for a target-only HF adapter')
+    if state.get('grpo_alignment_version') != 'response_rows_v2':
+        raise ValueError('GRPO alignment changed; old runs require retraining from initial weights')
     world = dist.get_world_size() if dist.is_initialized() else 1
     rank = dist.get_rank() if dist.is_initialized() else 0
     if state['world_size'] != world:
@@ -46,6 +49,8 @@ def load_checkpoint(path, *, target, optimizer, adapter_loader=None):
     if adapter_loader is None:
         from peft import set_peft_model_state_dict
         adapter_loader = set_peft_model_state_dict
+    if state.get('initial_target_tensor_sha256') != getattr(target,'_shared_initialization',{}).get('loaded_tensor_sha256'):
+        raise ValueError('resume initial target tensor hash mismatch')
     adapter_loader(target, state['target_lora'])
     optimizer.load_state_dict(state['optimizer_target'])
     local = state['rank_states'][rank]

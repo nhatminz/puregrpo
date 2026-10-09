@@ -86,7 +86,7 @@ def test_reward_filtering_normalization_and_text_pack_inherited():
     assert len(ids)==4 and all(len(x)==len(y)==len(z) for x,y,z in zip(ids,attention,mask))
 
 
-def test_verbatim_update_loop_preserves_microbatch_and_legacy_reward_association():
+def test_verbatim_microbatch_loss_and_optimizer_cadence_after_alignment_fix():
     # Prove that no "standard GRPO" library/scheduler silently replaces Source's
     # sorting, packing, old/ref logps, scaling or optimizer update cadence.
     src=(SOURCE/'grpo_speculative.py').read_text()
@@ -99,6 +99,15 @@ def test_verbatim_update_loop_preserves_microbatch_and_legacy_reward_association
     source_loop=ast.parse(textwrap.dedent(src[a:b])).body[0]
     local_loop=next(n for n in ast.walk(ast.parse(local)) if isinstance(n,ast.For)
                     and isinstance(n.target,ast.Name) and n.target.id=='grpo_iteration')
+    # Optional actual-update budget guards/counters use each trainer's data
+    # names; compare the unchanged packing/loss/optimizer body around them.
+    def objective_body(nodes):
+        return [n for n in nodes if not (
+            isinstance(n,ast.If) and 'max_target_optimizer_steps' in ast.unparse(n.test)
+            or isinstance(n,(ast.Assign,ast.AugAssign)) and any(
+                name in ast.unparse(n) for name in ('target_optimizer_steps',"['optimizer_steps']")))]
+    source_loop.body=objective_body(source_loop.body)
+    local_body=objective_body(local_loop.body)
     local_prefix=ast.For(target=local_loop.target,iter=local_loop.iter,
-                        body=local_loop.body[:len(source_loop.body)],orelse=[])
+                        body=local_body[:len(source_loop.body)],orelse=[])
     assert ast.dump(source_loop,include_attributes=False)==ast.dump(local_prefix,include_attributes=False)

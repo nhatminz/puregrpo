@@ -44,7 +44,7 @@ def parse_args(argv=None):
             max_training_padding_gap=256, logps_chunk_size=256, train_subset_seed=42,
             max_train_samples=0, seed=42, num_workers=4, log_interval=1,
             save_checkpoint_steps=0, keep_last_checkpoints=3, max_grpo_steps=0,
-            top_k=0, eval_interval=0).items():
+            top_k=0, eval_interval=0, max_target_optimizer_steps=0, max_rollout_prompts=0).items():
         p.add_argument('--'+name, type=int, default=default)
     for name, default in dict(target_lr=1e-6, beta=.01, epsilon=.1, temperature=1.,
                               top_p=.95, train_data_fraction=.4).items():
@@ -57,7 +57,7 @@ def parse_args(argv=None):
             p.error(key+' must be positive')
     if args.temperature <= 0 or args.target_lr <= 0 or args.train_data_fraction <= 0:
         p.error('temperature/LR/dataset fraction must be positive')
-    if any(getattr(args,k) < 0 for k in ('top_k','num_workers','eval_interval','max_grpo_steps','max_train_samples','max_training_padding_gap')):
+    if any(getattr(args,k) < 0 for k in ('top_k','num_workers','eval_interval','max_grpo_steps','max_train_samples','max_training_padding_gap','max_target_optimizer_steps','max_rollout_prompts')):
         p.error('counts/budgets cannot be negative')
     if args.eval_interval and not args.eval_dataset_path:
         p.error('periodic evaluation requires an explicit held-out eval_dataset_path')

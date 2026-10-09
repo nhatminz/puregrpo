@@ -142,3 +142,20 @@ def test_optional_evaluation_does_not_change_main_trajectory(tmp_path,monkeypatc
             generate=lambda *a,**k:autoregressive_generate(*a,cache_factory=Cache,**k))
         states.append(deepcopy(target.state_dict()))
     for key,value in states[0].items(): torch.testing.assert_close(value,states[1][key],rtol=0,atol=0)
+
+
+def test_actual_optimizer_and_prompt_budgets_do_not_overshoot(tmp_path,monkeypatch):
+    actual_save=training.save_checkpoint
+    monkeypatch.setattr(training,'save_checkpoint',lambda *a,target,**k:
+        actual_save(*a,target=target,adapter_state=target.state_dict(),**k))
+    args=args_for(tmp_path);args.grpo_iteration_num=3
+    args.max_target_optimizer_steps=1;args.max_rollout_prompts=1
+    calls=[0]
+    def reward(values,truth):
+        calls[0]+=1;return [float(calls[0]%2)]
+    def generate(*a,**k):return autoregressive_generate(*a,cache_factory=Cache,**k)
+    report=training.train(args,target=Target(),tokenizer=Tokenizer(),device='cpu',
+        train_rows=[{'question':str(i),'answer':'0'} for i in range(8)],
+        reward_functions=(lambda x:[0.],reward),generate=generate)
+    assert report['optimizer_steps']==1 and report['rollout_prompts_seen']==1
+    assert report['optimizer_step_cadence']==[(1,1)]

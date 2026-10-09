@@ -1,4 +1,5 @@
 """Inherited group filtering, text masks/packing and target optimizer schedule."""
+from helper.response_alignment import append_response_group, sort_training_rows
 from copy import deepcopy
 import time
 import numpy as np
@@ -6,7 +7,7 @@ import torch
 from helper.grpo_core import compute_target_loss_and_backward, _sync_gradients
 
 
-def accumulate_groups(batch_data, outputs, messages, answers, repeated_generate_nums, format_reward_func=None, accuracy_reward_func=None):
+def accumulate_groups(batch_data, outputs, messages, answers, repeated_generate_nums, format_reward_func=None, accuracy_reward_func=None, *, prompt_context=None):
     if format_reward_func is None or accuracy_reward_func is None:
         from helper.rewards import format_reward_func, accuracy_reward_func
     used_items = 0
@@ -45,9 +46,8 @@ def accumulate_groups(batch_data, outputs, messages, answers, repeated_generate_
             continue
         
         std_rewards=(rewards-rewards.mean())/rewards.std()
-        batch_data['messages']+=new_messages
-        batch_data['rewards']+=rewards.tolist()
-        batch_data['std_rewards']+=std_rewards.tolist()
+        append_response_group(batch_data, new_messages, rewards.tolist(), std_rewards.tolist(),
+                              (prompt_context, idx_batch))
         used_items+=1
         
     generate_length /= len(answers)
@@ -69,15 +69,8 @@ def pack_training_inputs(batch_data, tokenizer):
     input_ids=text.input_ids
     attention_mask=text.attention_mask
     
-    sorted_pairs = sorted(
-        zip(input_ids, attention_mask, loss_mask),
-        key=lambda x: len(x[0]),
-        reverse=False   
-    )
-
-    input_ids_sorted, attention_mask_sorted, loss_mask_sorted = zip(*sorted_pairs)
-
-    input_ids, attention_mask, loss_mask = list(input_ids_sorted), list(attention_mask_sorted), list(loss_mask_sorted)
+    input_ids, attention_mask, loss_mask = sort_training_rows(
+        input_ids, attention_mask, loss_mask, batch_data)
 
     return input_ids, attention_mask, loss_mask
 
@@ -92,6 +85,8 @@ def update_policy(model, optimizer_target, batch_data, tokenizer, args, phase_ti
     epsilon, beta = args.epsilon, args.beta
     batch_old_logps, batch_ref_logps = [], []
     for grpo_iteration in range(grpo_iteration_num):
+        if getattr(args,'max_target_optimizer_steps',0)>0 and batch_data['optimizer_steps']>=args.max_target_optimizer_steps:
+            break
         if statistical_time and torch.cuda.is_available():
             torch.cuda.synchronize()
         train_time_start=time.time()

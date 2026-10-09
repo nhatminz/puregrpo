@@ -4,3 +4,7 @@ __pycache__/
 .venv/
 outputs/
 wheelhouse/
+.venv-*/
+.cache/
+cache/
+*_cache/
